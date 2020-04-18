@@ -6,9 +6,7 @@ use std::panic;
 
 /**
  * Determines which product gets which parser.
- * TODO: We're catching panics here. Yes, this is UGLY and BAD - but there are a ton of slices and
- * regex Option unwraps buried within. One rainy day, I'll start validating the correctness,
- * but for now, it's critical that the processing threads don't die.
+ * NOTE: We're catching panics here - not ideal, but processing threads can't die.
  */
 pub fn parse(product: &Product) -> Option<Event> {
     let result = panic::catch_unwind(|| match product.product_code.as_ref() {

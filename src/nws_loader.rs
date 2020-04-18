@@ -35,6 +35,7 @@ pub fn run(writer: &Arc<Store>) {
                         let new_products = get_new_products(last_product_ts, product_list);
 
                         if !new_products.is_empty() {
+                            // info!("found {} new {} event[s]", new_products.len(), code);
                             last_product_ts =
                                 util::ts_to_ticks(&new_products[0].issuance_time).unwrap();
                         }
@@ -53,9 +54,7 @@ pub fn run(writer: &Arc<Store>) {
                     }
 
                     let elapsed_seconds = util::get_system_secs() - start;
-                    let delay = POLL_INTERVAL_SECONDS
-                        .checked_sub(elapsed_seconds)
-                        .unwrap_or(0);
+                    let delay = POLL_INTERVAL_SECONDS.saturating_sub(elapsed_seconds);
                     thread::sleep(Duration::from_secs(delay));
                 }
             })

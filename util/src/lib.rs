@@ -5,6 +5,34 @@ use chrono::prelude::*;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /**
+ * Safely unwraps a Result<T, E> if Ok, otherwise returns the calling function with None.
+ * Useful for early exiting in functions that return Option<T>.
+ */
+#[macro_export]
+macro_rules! safe_result {
+    ( $e:expr ) => {
+        match $e {
+            Ok(x) => x,
+            Err(_) => return None,
+        }
+    };
+}
+
+/**
+ * Safely unwraps an Option<T> if Some, otherwise returns the calling function with None.
+ * Useful for early exiting in functions that return Option<T>.
+ */
+#[macro_export]
+macro_rules! safe_option {
+    ( $e:expr ) => {
+        match $e {
+            Some(x) => x,
+            None => return None,
+        }
+    };
+}
+
+/**
  * Converts an RFC3339 timestamp to microsecond ticks.
  */
 pub fn ts_to_ticks(input: &str) -> Result<u64, ()> {

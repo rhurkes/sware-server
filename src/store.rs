@@ -10,7 +10,7 @@ const EVENT_THRESHOLD_MICROS: u128 = 1000 * 1000 * 60 * 60; // 1 hr
 
 pub struct Store {
     db: DB,
-    mutex: Mutex<usize>,
+    mutex: Mutex<()>,
 }
 
 impl Store {
@@ -19,9 +19,8 @@ impl Store {
         opts.create_if_missing(true);
         opts.enable_statistics();
         opts.set_compression_type(DBCompressionType::Lz4hc);
-        let db = DB::open(&opts, STORE_PATH)
-            .expect(&format!("Unable to open store at path: {:?}", STORE_PATH));
-        let mutex = Mutex::new(0);
+        let db = DB::open(&opts, STORE_PATH).expect("Unable to open store");
+        let mutex = Mutex::new(());
 
         Store { db, mutex }
     }
@@ -32,32 +31,30 @@ impl Store {
         match serialize(event) {
             Ok(value) => match self.db.put(&key.to_be_bytes(), &value) {
                 Ok(_) => (),
-                Err(e) => error!("Unable to put event: {}", e)
+                Err(e) => error!("Unable to put event: {}", e),
             },
-            Err(e) => error!("Unable to serialize event: {}", e)
+            Err(e) => error!("Unable to serialize event: {}", e),
         };
     }
 
     pub fn get_events(&self, key: Option<u128>) -> Vec<OptimizedEvent> {
-        let key = if key.is_none() {
-            get_system_micros() - EVENT_THRESHOLD_MICROS
+        let key = if let Some(key) = key {
+            key + 1 // Skip the key passed in
         } else {
-            key.unwrap() + 1 // Skip the key passed in
+            get_system_micros() - EVENT_THRESHOLD_MICROS
         };
 
-        self
-            .db
+        self.db
             .iterator(IteratorMode::From(&key.to_be_bytes(), Direction::Forward))
-            .map(|(_, value)| {
-                match deserialize(&*value) {
-                    Ok(value) => Some(value),
-                    Err(e) => {
-                        error!("Unable to deserialize event with key {}: {}", key, e);
-                        None
-                    }
+            .map(|(_, value)| match deserialize(&*value) {
+                Ok(value) => Some(value),
+                Err(e) => {
+                    error!("Unable to deserialize event with key {}: {}", key, e);
+                    None
                 }
             })
-            .filter_map(Option::unwrap)
+            .filter(Option::is_some)
+            .map(|event| event.unwrap())
             .collect()
     }
 

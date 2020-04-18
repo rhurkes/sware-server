@@ -1,10 +1,9 @@
 use chrono::prelude::*;
 use domain::{Coordinates, Event, EventType, HazardType, Location, Product, Report, Units};
 use util;
+use util::{safe_option, safe_result};
 
 const AGE_THRESHOLD_MICROS: u64 = 60 * 60 * 1000 * 1000;
-
-// TODO handle snow and heavy snow events
 
 // Intermediary structure for an LSR to make parsing easier
 #[derive(Debug)]
@@ -18,13 +17,15 @@ struct Skeleton<'a> {
 
 pub fn parse(product: &Product) -> Option<Event> {
     let text = &product.product_text;
-    let lsr = get_skeleton(&text)?;
-    let event_ts = util::ts_to_ticks(&product.issuance_time).unwrap();
+    let lsr = safe_option!(get_skeleton(&text));
+    let event_ts = safe_result!(util::ts_to_ticks(&product.issuance_time));
     let raw_ts = lsr.bottom_line.get(0..10).unwrap().to_string() + lsr.top_line.get(0..7).unwrap();
+    #[allow(unused_variables)]
     let offset: Vec<&str> = lsr.lines[7].split(' ').collect();
-    let offset = util::tz_to_offset(offset[2]).unwrap();
+    let offset = safe_result!(util::tz_to_offset(offset[2]));
+    #[allow(unused_variables)]
     let raw_ts = raw_ts + offset;
-    let report_ts = get_report_ticks(&raw_ts).unwrap();
+    let report_ts = safe_result!(get_report_ticks(&raw_ts));
 
     // Skip reports too far in the past, since these can come hours, days, or even months later
     if event_ts - report_ts > AGE_THRESHOLD_MICROS {
@@ -201,14 +202,14 @@ mod tests {
 
     #[test]
     fn get_skeleton_summary_should_be_an_ok_none() {
-        let product = get_product_from_file("data/products/lsr-summary");
+        let product = get_product_from_file("../data/products/lsr-summary");
         let result = get_skeleton(&product.product_text);
         assert!(result.is_none());
     }
 
     #[test]
     fn get_skeleton_corrected_should_be_an_error() {
-        let product = get_product_from_file("data/products/lsr-corrected-tstm-wind-dmg");
+        let product = get_product_from_file("../data/products/lsr-corrected-tstm-wind-dmg");
         let result = get_skeleton(&product.product_text);
         assert!(result.is_none());
     }
@@ -250,7 +251,7 @@ mod tests {
 
     #[test]
     fn parse_tornado_report() {
-        let product = get_product_from_file("data/products/lsr-tornado");
+        let product = get_product_from_file("../data/products/lsr-tornado");
         let result = parse(&product).unwrap();
         let serialized_result = serde_json::to_string(&result).unwrap();
         let expected = r#"{"event_ts":1522524900000000,"event_type":"NwsLsr","expires_ts":null,"ext_uri":null,"ingest_ts":0,"location":{"wfo":"KMFL","point":{"lat":26.8,"lon":-80.64},"poly":null,"county":"PALM BEACH"},"md":null,"outlook":null,"report":{"reporter":"TRAINED SPOTTER","hazard":"Tornado","magnitude":null,"units":null,"was_measured":null,"report_ts":1522522800000000},"text":"\n158 \nNWUS52 KMFL 311935\nLSRMFL\n\nPRELIMINARY LOCAL STORM REPORT\nNATIONAL WEATHER SERVICE MIAMI FL\n335 PM EDT SAT MAR 31 2018\n\n..TIME...   ...EVENT...      ...CITY LOCATION...     ...LAT.LON...\n..DATE...   ....MAG....      ..COUNTY LOCATION..ST.. ...SOURCE....\n            ..REMARKS..\n\n0300 PM     TORNADO          2 SE PAHOKEE            26.80N  80.64W\n03/31/2018                   PALM BEACH         FL   TRAINED SPOTTER \n\n            TRAINED SKYWARN SPOTTER OBSERVED FROM PAHOKEE A FUNNEL \n            CLOUD APPROXIMATELY 3 MILES SOUTHEAST OF PAHOKEE, \n            PARTIALLY RAIN-WRAPPED AND NEARLY STATIONARY. THE FUNNEL \n            EXTENDED TO NEARLY HALFWAY TO THE GROUND BEFORE LIFTING. \n            LOCATION RADAR-ESTIMATED/ADJUSTED. VIDEO RECEIVED OF \n            FUNNEL REACHING THE GROUND WITH DUST BEING KICKED UP. \n            RECLASSIFIED AS A TORNADO. \n\n\n&&\nEVENT...FATALITIES...INJURIES...REMARKS\n\nEVENT NUMBER MFL1800020\n\n$$\n\nSI\n\n\n\n","title":"Report:  Tornado (KMFL)","valid_ts":null,"warning":null,"watch":null}"#;
@@ -259,14 +260,14 @@ mod tests {
 
     #[test]
     fn parse_old_report_should_be_ok_none() {
-        let product = get_product_from_file("data/products/lsr-tornado-old");
+        let product = get_product_from_file("../data/products/lsr-tornado-old");
         let result = parse(&product);
         assert!(result.is_none());
     }
 
     #[test]
     fn parse_wind_speed_report() {
-        let product = get_product_from_file("data/products/lsr-tstm-wind");
+        let product = get_product_from_file("../data/products/lsr-tstm-wind");
         let result = parse(&product).unwrap();
         let serialized_result = serde_json::to_string(&result).unwrap();
         let expected = r#"{"event_ts":1555316100000000,"event_type":"NwsLsr","expires_ts":null,"ext_uri":null,"ingest_ts":0,"location":{"wfo":"KMHX","point":{"lat":35.07,"lon":-77.04},"poly":null,"county":"CRAVEN"},"md":null,"outlook":null,"report":{"reporter":"ASOS","hazard":"Wind","magnitude":61.0,"units":"Mph","was_measured":true,"report_ts":1555315080000000},"text":"\n000\nNWUS52 KMHX 150815\nLSRMHX\n\nPRELIMINARY LOCAL STORM REPORT\nNATIONAL WEATHER SERVICE NEWPORT/MOREHEAD CITY NC\n415 AM EDT MON APR 15 2019\n\n..TIME...   ...EVENT...      ...CITY LOCATION...     ...LAT.LON...\n..DATE...   ....MAG....      ..COUNTY LOCATION..ST.. ...SOURCE....\n            ..REMARKS..\n\n0358 AM     TSTM WND GST     COASTAL CAROLINA REGION 35.07N 77.04W\n04/15/2019  M61 MPH          CRAVEN             NC   ASOS             \n\n            NEW BERN/CRAVEN COUNTY ASOS (EWN) REPORTS \n            GUST OF 61 MPH. \n\n\n&&\n\n$$\n\nML\n\n","title":"Report:  61mph Wind (KMHX)","valid_ts":null,"warning":null,"watch":null}"#;
@@ -275,7 +276,7 @@ mod tests {
 
     #[test]
     fn parse_hail_report() {
-        let product = get_product_from_file("data/products/lsr-hail-remarks");
+        let product = get_product_from_file("../data/products/lsr-hail-remarks");
         let result = parse(&product).unwrap();
         let serialized_result = serde_json::to_string(&result).unwrap();
         let expected = r#"{"event_ts":1522113360000000,"event_type":"NwsLsr","expires_ts":null,"ext_uri":null,"ingest_ts":0,"location":{"wfo":"KSJT","point":{"lat":32.07,"lon":-100.66},"poly":null,"county":"COKE"},"md":null,"outlook":null,"report":{"reporter":"STORM CHASER","hazard":"Hail","magnitude":1.25,"units":"Inches","was_measured":false,"report_ts":1522112100000000},"text":"\n106 \nNWUS54 KSJT 270116\nLSRSJT\n\nPRELIMINARY LOCAL STORM REPORT\nNational Weather Service San Angelo Tx\n816 PM CDT MON MAR 26 2018\n\n..TIME...   ...EVENT...      ...CITY LOCATION...     ...LAT.LON...\n..DATE...   ....MAG....      ..COUNTY LOCATION..ST.. ...SOURCE....\n            ..REMARKS..\n\n0755 PM     HAIL             1 E SILVER              32.07N 100.66W\n03/26/2018  E1.25 INCH       COKE               TX   STORM CHASER    \n\n            1.25 HAIL ON HWY 208 NEAR SILVER \n\n\n&&\n\nEVENT NUMBER SJT1800032\n\n$$\n\nSJT\n\n","title":"Report:  1.25\" Hail (KSJT)","valid_ts":null,"warning":null,"watch":null}"#;
@@ -284,7 +285,7 @@ mod tests {
 
     #[test]
     fn parse_should_not_handle_multiple_events() {
-        let product = get_product_from_file("data/products/lsr-multiple-heavy-rain");
+        let product = get_product_from_file("../data/products/lsr-multiple-heavy-rain");
         let result = parse(&product);
         assert!(result.is_none());
     }

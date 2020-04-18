@@ -1,6 +1,7 @@
 use chrono::prelude::*;
 use domain::{Coordinates, Event, EventType, HazardType, Location, Report, Units};
 use regex::Regex;
+use std::fmt;
 
 const REPORT_PATTERN: &str = r"Icon: (?P<lat>\d{2}\.\d{6}),(?P<lon>-\d{2,3}\.\d{6}),000,\d,(?P<hazard_code>\d),.Reported By: (?P<reporter>.+)\\n.+\\nTime: (?P<ts>.+) UTC(?:\\nSize: (?P<size>\d{1,2}\.\d{2}).+?)*(?:\\n(?P<mph>\d{1,3}) mph)*(?P<measured> \[Measured\])*.+otes: (?P<notes>.+).$";
 
@@ -43,13 +44,13 @@ pub fn parse(report: &str) -> Option<Event> {
     let size_cap = captures.name("size");
     let mut title = format!("Report: {}", hazard.to_string());
 
-    if mph_cap.is_some() {
-        let mph = mph_cap.unwrap().as_str().parse().unwrap_or_default();
+    if let Some(mph_cap) = mph_cap {
+        let mph = mph_cap.as_str().parse().unwrap_or_default();
         title = format!("Report: {}mph {}", mph, hazard.to_string());
         report.magnitude = Some(mph);
         report.units = Some(Units::Mph);
-    } else if size_cap.is_some() {
-        let size = size_cap.unwrap().as_str().parse().unwrap_or_default();
+    } else if let Some(size_cap) = size_cap {
+        let size = size_cap.as_str().parse().unwrap_or_default();
         title = format!("Report: {}\" {}", size, hazard.to_string());
         report.magnitude = Some(size);
         report.units = Some(Units::Inches);
@@ -107,7 +108,7 @@ pub fn parse(report: &str) -> Option<Event> {
     Some(event)
 }
 
-#[derive(Deserialize, Eq, PartialEq, Serialize, Clone)]
+#[derive(Debug, Deserialize, Eq, PartialEq, Serialize, Clone)]
 pub enum Hazard {
     Tornado = 0isize,
     Funnel,
@@ -155,9 +156,11 @@ impl Hazard {
             Hazard::Snow => HazardType::Snow,
         }
     }
+}
 
-    fn to_string(&self) -> String {
-        match self {
+impl fmt::Display for Hazard {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let value = match self {
             Hazard::Tornado => "Tornado",
             Hazard::Funnel => "Funnel",
             Hazard::WallCloud => "Wall Cloud",
@@ -168,104 +171,104 @@ impl Hazard {
             Hazard::Other => "Other",
             Hazard::FreezingRain => "Freezing Rain",
             Hazard::Snow => "Snow",
-        }
-        .to_string()
+        };
+        write!(f, "{}", value)
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::domain::HazardType;
-//     use std::fs::File;
-//     use std::io::{BufRead, BufReader};
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use domain::HazardType;
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
 
-//     #[test]
-//     fn parse_should_skip_empty_other_reports() {
-//         let reports_file = File::open("data/reports-other-none").unwrap();
-//         let reader = BufReader::new(reports_file);
+    #[test]
+    fn parse_should_skip_empty_other_reports() {
+        let reports_file = File::open("../data/reports-other-none").unwrap();
+        let reader = BufReader::new(reports_file);
 
-//         reader
-//             .lines()
-//             .map(|x| x.unwrap())
-//             .filter(|x| x.starts_with("Icon:"))
-//             .for_each(|x| {
-//                 let message = parse(&x);
-//                 assert!(message.unwrap().is_none());
-//             });
-//     }
+        reader
+            .lines()
+            .map(|x| x.unwrap())
+            .filter(|x| x.starts_with("Icon:"))
+            .for_each(|x| {
+                let message = parse(&x);
+                assert!(message.is_none());
+            });
+    }
 
-//     #[test]
-//     fn parse_should_return_an_event_with_all_required_fields() {
-//         let report = r#"Icon: 43.112000,-94.639999,000,3,5,"Reported By: Test Human\nHigh Wind\nTime: 2018-09-20 22:52:00 UTC\n60 mph [Measured]\nNotes: Strong winds measured at 60mph with anemometer""#;
-//         let event = parse(report).unwrap().unwrap();
+    #[test]
+    fn parse_should_return_an_event_with_all_required_fields() {
+        let report = r#"Icon: 43.112000,-94.639999,000,3,5,"Reported By: Test Human\nHigh Wind\nTime: 2018-09-20 22:52:00 UTC\n60 mph [Measured]\nNotes: Strong winds measured at 60mph with anemometer""#;
+        let event = parse(report).unwrap();
 
-//         assert_eq!(
-//             event,
-//             Event {
-//                 event_ts: 1537483920000000,
-//                 event_type: EventType::SnReport,
-//                 expires_ts: None,
-//                 ext_uri: None,
-//                 ingest_ts: 0,
-//                 location: Some(Location {
-//                     county: None,
-//                     wfo: None,
-//                     point: Some(Coordinates {
-//                         lat: 43.112,
-//                         lon: -94.64
-//                     }),
-//                     poly: None
-//                 }),
-//                 md: None,
-//                 outlook: None,
-//                 report: Some(Report {
-//                     reporter: "Test Human".to_string(),
-//                     hazard: HazardType::Wind,
-//                     magnitude: Some(60.0),
-//                     units: Some(Units::Mph),
-//                     was_measured: Some(true),
-//                     report_ts: None
-//                 }),
-//                 text: Some(
-//                     "Wind reported by Test Human. Strong winds measured at 60mph with anemometer"
-//                         .to_string()
-//                 ),
-//                 title: "Report: 60mph Wind".to_string(),
-//                 valid_ts: None,
-//                 warning: None,
-//                 watch: None
-//             }
-//         );
-//     }
+        assert_eq!(
+            event,
+            Event {
+                event_ts: 1537483920000000,
+                event_type: EventType::SnReport,
+                expires_ts: None,
+                ext_uri: None,
+                ingest_ts: 0,
+                location: Some(Location {
+                    county: None,
+                    wfo: None,
+                    point: Some(Coordinates {
+                        lat: 43.112,
+                        lon: -94.64
+                    }),
+                    poly: None
+                }),
+                md: None,
+                outlook: None,
+                report: Some(Report {
+                    reporter: "Test Human".to_string(),
+                    hazard: HazardType::Wind,
+                    magnitude: Some(60.0),
+                    units: Some(Units::Mph),
+                    was_measured: Some(true),
+                    report_ts: None
+                }),
+                text: Some(
+                    "Wind reported by Test Human. Strong winds measured at 60mph with anemometer"
+                        .to_string()
+                ),
+                title: "Report: 60mph Wind".to_string(),
+                valid_ts: None,
+                warning: None,
+                watch: None
+            }
+        );
+    }
 
-//     #[test]
-//     fn report_should_not_blow_up_with_non_utf8_characters() {
-//         let report = r#"Icon: 43.112000,-94.639999,000,3,5,"Reported By: Test Human\nHigh Wind\nTime: 2018-09-20 22:52:00 UTC\n60 mph [Measured]\nNotes: Strong �������������������������������������������������������������������� measured at 60mph with anemometer""#;
-//         let event = parse(report);
-//         assert!(event.is_ok());
-//     }
+    #[test]
+    fn report_should_not_blow_up_with_non_utf8_characters() {
+        let report = r#"Icon: 43.112000,-94.639999,000,3,5,"Reported By: Test Human\nHigh Wind\nTime: 2018-09-20 22:52:00 UTC\n60 mph [Measured]\nNotes: Strong �������������������������������������������������������������������� measured at 60mph with anemometer""#;
+        let event = parse(report);
+        assert!(event.is_some());
+    }
 
-//     #[test]
-//     fn report_should_parse_optional_mph() {
-//         let report = r#"Icon: 43.112000,-94.639999,000,3,5,"Reported By: Test Human\nHigh Wind\nTime: 2018-09-20 22:52:00 UTC\n60 mph [Measured]\nNotes: Strong winds measured at 60mph with anemometer""#;
-//         let parsed_report = parse(report).unwrap().unwrap().report.unwrap();
-//         assert_eq!(parsed_report.magnitude, Some(60.0));
-//         assert_eq!(parsed_report.units, Some(Units::Mph));
-//     }
+    #[test]
+    fn report_should_parse_optional_mph() {
+        let report = r#"Icon: 43.112000,-94.639999,000,3,5,"Reported By: Test Human\nHigh Wind\nTime: 2018-09-20 22:52:00 UTC\n60 mph [Measured]\nNotes: Strong winds measured at 60mph with anemometer""#;
+        let parsed_report = parse(report).unwrap().report.unwrap();
+        assert_eq!(parsed_report.magnitude, Some(60.0));
+        assert_eq!(parsed_report.units, Some(Units::Mph));
+    }
 
-//     #[test]
-//     fn report_should_parse_optional_measured() {
-//         let report = r#"Icon: 43.112000,-94.639999,000,3,5,"Reported By: Test Human\nHigh Wind\nTime: 2018-09-20 22:52:00 UTC\n60 mph [Measured]\nNotes: Strong winds measured at 60mph with anemometer""#;
-//         let parsed_report = parse(report).unwrap().unwrap().report.unwrap();
-//         assert_eq!(parsed_report.was_measured, Some(true));
-//     }
+    #[test]
+    fn report_should_parse_optional_measured() {
+        let report = r#"Icon: 43.112000,-94.639999,000,3,5,"Reported By: Test Human\nHigh Wind\nTime: 2018-09-20 22:52:00 UTC\n60 mph [Measured]\nNotes: Strong winds measured at 60mph with anemometer""#;
+        let parsed_report = parse(report).unwrap().report.unwrap();
+        assert_eq!(parsed_report.was_measured, Some(true));
+    }
 
-//     #[test]
-//     fn report_should_parse_optional_size() {
-//         let report = r#"Icon: 47.617706,-111.215248,000,4,4,"Reported By: Test Human\nHail\nTime: 2018-09-20 22:49:29 UTC\nSize: 0.75" (Penny)\nNotes: None""#;
-//         let parsed_report = parse(report).unwrap().unwrap().report.unwrap();
-//         assert_eq!(parsed_report.magnitude, Some(0.75));
-//         assert_eq!(parsed_report.units, Some(Units::Inches));
-//     }
-// }
+    #[test]
+    fn report_should_parse_optional_size() {
+        let report = r#"Icon: 47.617706,-111.215248,000,4,4,"Reported By: Test Human\nHail\nTime: 2018-09-20 22:49:29 UTC\nSize: 0.75" (Penny)\nNotes: None""#;
+        let parsed_report = parse(report).unwrap().report.unwrap();
+        assert_eq!(parsed_report.magnitude, Some(0.75));
+        assert_eq!(parsed_report.units, Some(Units::Inches));
+    }
+}

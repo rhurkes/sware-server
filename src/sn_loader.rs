@@ -26,31 +26,23 @@ pub fn run(writer: &Arc<Store>) {
 
     loop {
         let start = util::get_system_secs();
-        let response = HTTP_CLIENT.fetch_text(API_URL);
 
-        match response {
-            Ok(body) => {
-                let comparison = get_comparison(&body, seen);
-                seen = comparison.latest_set;
-
-                comparison
-                    .new
-                    .iter()
-                    .map(|report| sn_parser::parse(report))
-                    .for_each(|event| match event {
-                        Some(mut event) => {
-                            writer.put_event(&mut event);
-                        }
-                        None => (),
-                    });
-            }
-            Err(_) => (),
-        }
+        if let Ok(body) = HTTP_CLIENT.fetch_text(API_URL) {
+            let comparison = get_comparison(&body, seen);
+            seen = comparison.latest_set;
+            comparison
+                .new
+                .iter()
+                .map(|report| sn_parser::parse(report))
+                .for_each(|event| {
+                    if let Some(mut event) = event {
+                        writer.put_event(&mut event)
+                    }
+                });
+        };
 
         let elapsed_seconds = util::get_system_secs() - start;
-        let delay = POLL_INTERVAL_SECONDS
-            .checked_sub(elapsed_seconds)
-            .unwrap_or(0);
+        let delay = POLL_INTERVAL_SECONDS.saturating_sub(elapsed_seconds);
         thread::sleep(Duration::from_secs(delay));
     }
 }
@@ -59,7 +51,7 @@ fn get_comparison(body: &str, seen: FnvHashSet<String>) -> Comparison {
     let latest_set: FnvHashSet<String> = body
         .lines()
         .filter(|x| x.starts_with("Icon:"))
-        .map(|x| normalize_line(x).to_string())
+        .map(|x| normalize_line(x))
         .collect();
 
     let new: Vec<String> = latest_set

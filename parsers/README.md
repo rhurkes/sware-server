@@ -1,0 +1,3 @@
+# Parsers
+- Each parser returns an `Option<Event>`. The return type used to be `Result<Option<Event>, Error>` but that proved cumbersome to work with, and was only useful when bubbling up errors. Switching to `Option<Event>` requires handling errors at the call site.
+- An early exit from each parser can be accomplished by simply returning `None`. The `safe_result!` and `safe_option!` macros make this easier, but will silently discard the `Err` and `None` paths - so they should only be used on functions that actually log/handle the underlying errors.
