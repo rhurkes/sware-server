@@ -1,0 +1,5 @@
+/target
+sware_store/
+.idea/
+**/*.rs.bk
+.DS_Store
