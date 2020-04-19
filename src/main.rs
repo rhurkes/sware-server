@@ -45,14 +45,17 @@ async fn main() {
             }),
     );
 
-    let events_route = warp::path("events").and(with_store).map(get_events_handler);
+    // GET /events/:u128
+    let events_route = warp::path!("events" / u128)
+        .and(warp::get())
+        .and(with_store)
+        .map(get_events_handler);
 
-    let routes = warp::get().and(events_route);
-    warp::serve(routes).run(([127, 0, 0, 1], 8080)).await;
+    warp::serve(events_route).run(([127, 0, 0, 1], 8080)).await;
 }
 
-fn get_events_handler(store: Arc<Store>) -> impl warp::Reply {
-    let events = store.get_events(None);
+fn get_events_handler(id: u128, store: Arc<Store>) -> impl warp::Reply {
+    let events = store.get_events(id);
     warp::reply::json(&events)
 }
 

@@ -31,8 +31,10 @@ Details of product codes and products can be found at: https://en.wikipedia.org/
 - implement sev/pts once mapping client exists
 
 # TODO
+- nginx service not working right
+- deploy spa
+- backup nginx configs
 - increase test coverage
 - expose store stats via route
-- update to official warp once compression is enabled: https://github.com/seanmonstar/warp/pull/513
 - add benchmarks
 - remove all unwraps or look into parser combinators

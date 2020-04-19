@@ -37,11 +37,11 @@ impl Store {
         };
     }
 
-    pub fn get_events(&self, key: Option<u128>) -> Vec<OptimizedEvent> {
-        let key = if let Some(key) = key {
-            key + 1 // Skip the key passed in
-        } else {
+    pub fn get_events(&self, key: u128) -> Vec<OptimizedEvent> {
+        let key = if key == 0 {
             get_system_micros() - EVENT_THRESHOLD_MICROS
+        } else {
+            key + 1 // Skip the key passed in
         };
 
         self.db
