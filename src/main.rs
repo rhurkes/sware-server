@@ -45,11 +45,14 @@ async fn main() {
             }),
     );
 
+    let cors = warp::cors().allow_any_origin();
+
     // GET /events/:u128
     let events_route = warp::path!("events" / u128)
         .and(warp::get())
         .and(with_store)
-        .map(get_events_handler);
+        .map(get_events_handler)
+        .with(cors);
 
     warp::serve(events_route).run(([127, 0, 0, 1], 8080)).await;
 }
