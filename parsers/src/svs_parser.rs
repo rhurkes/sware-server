@@ -13,7 +13,6 @@ pub fn parse(product: &Product) -> Option<Event> {
     let is_pds = lower_case_text.contains("particularly dangerous situation");
 
     if !is_tor_emergency && !is_pds {
-        info!("Skipping non-tornado SVS");
         return None;
     }
 

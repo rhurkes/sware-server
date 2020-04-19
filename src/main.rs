@@ -47,9 +47,7 @@ async fn main() {
 
     let events_route = warp::path("events").and(with_store).map(get_events_handler);
 
-    let routes = warp::get()
-        .and(events_route)
-        .with(warp::compression::auto());
+    let routes = warp::get().and(events_route);
     warp::serve(routes).run(([127, 0, 0, 1], 8080)).await;
 }
 
