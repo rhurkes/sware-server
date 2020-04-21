@@ -16,16 +16,11 @@ mod store;
 
 #[tokio::main]
 async fn main() {
-    let log_level = std::env::var("SWARE_LOG_LEVEL").unwrap_or_default();
-    env_logger::builder()
-        .filter_level(get_log_level(&log_level))
-        .init();
-
-    let mut threads = vec![];
+    env_logger::builder().filter_level(LevelFilter::Info).init();
     let store = Arc::new(Store::new());
+    let mut threads = vec![];
     let sn_store = store.clone();
     let nws_api_store = store.clone();
-    let with_store = warp::any().map(move || store.clone());
 
     // Run SpotterNetwork loader
     threads.push(
@@ -45,29 +40,50 @@ async fn main() {
             }),
     );
 
-    let cors = warp::cors().allow_any_origin();
-
-    // GET /events/:u128
-    let events_route = warp::path!("events" / u128)
-        .and(warp::get())
-        .and(with_store)
-        .map(get_events_handler)
-        .with(cors);
-
-    warp::serve(events_route).run(([127, 0, 0, 1], 8080)).await;
+    warp::serve(filters(store))
+        .run(([127, 0, 0, 1], 8080))
+        .await;
 }
 
-fn get_events_handler(id: u128, store: Arc<Store>) -> impl warp::Reply {
+fn with_store(
+    store: Arc<Store>,
+) -> impl Filter<Extract = (Arc<Store>,), Error = std::convert::Infallible> + Clone {
+    warp::any().map(move || store.clone())
+}
+
+fn filters(
+    store: Arc<Store>,
+) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    events_filter(store.clone()).or(stats_filter(store))
+}
+
+// GET /events/:u128
+fn events_filter(
+    store: Arc<Store>,
+) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    warp::path!("events" / u128)
+        .and(warp::get())
+        .and(with_store(store))
+        .map(events_handler)
+        .with(warp::cors().allow_any_origin())
+}
+
+// GET /stats
+fn stats_filter(
+    store: Arc<Store>,
+) -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
+    warp::path!("stats")
+        .and(warp::get())
+        .and(with_store(store))
+        .map(stats_handler)
+}
+
+fn events_handler(id: u128, store: Arc<Store>) -> impl warp::Reply {
     let events = store.get_events(id);
     warp::reply::json(&events)
 }
 
-fn get_log_level(input: &str) -> LevelFilter {
-    match input.to_lowercase().as_str() {
-        "error" => LevelFilter::Error,
-        "warn" => LevelFilter::Warn,
-        "info" => LevelFilter::Info,
-        "debug" => LevelFilter::Debug,
-        _ => LevelFilter::Info,
-    }
+fn stats_handler(store: Arc<Store>) -> impl warp::Reply {
+    let stats = store.get_stats();
+    warp::reply::json(&stats)
 }

@@ -10,6 +10,7 @@ const EVENT_THRESHOLD_MICROS: u128 = 1000 * 1000 * 60 * 60; // 1 hr
 
 pub struct Store {
     db: DB,
+    opts: Options,
     mutex: Mutex<()>,
 }
 
@@ -22,7 +23,7 @@ impl Store {
         let db = DB::open(&opts, STORE_PATH).expect("Unable to open store");
         let mutex = Mutex::new(());
 
-        Store { db, mutex }
+        Store { db, opts, mutex }
     }
 
     pub fn put_event(&self, event: &mut Event) {
@@ -56,6 +57,12 @@ impl Store {
             .filter(Option::is_some)
             .map(|event| event.unwrap())
             .collect()
+    }
+
+    pub fn get_stats(&self) -> String {
+        self.opts
+            .get_statistics()
+            .unwrap_or_else(|| "N/A".to_string())
     }
 
     fn get_key(&self) -> u128 {

@@ -26,6 +26,9 @@ Details of product codes and products can be found at: https://en.wikipedia.org/
 - `FFA` Flash Flood Watch (need sample)
 
 ### TODO
+- get location/direction for PDS TORs in SVS: 1587342012426610
+- should not set off alert for canceling PDS TOR warning in SVS: 1587343271629732
+- handle flash floods in LSR (data/products/lsr-flashflood)
 - handle multiple events in an LSR
 - check on TSTM and non-severe outlooks once they happen, to finish get_outlook_risk
 - implement sev/pts once mapping client exists
@@ -34,6 +37,7 @@ Details of product codes and products can be found at: https://en.wikipedia.org/
 - nginx service not working right
 - deploy spa
 - backup nginx configs
+- add faster polling times when certain events seen, ie. more TOR/LSR/SN polling when in a tornado watch
 - increase test coverage
 - expose store stats via route
 - add benchmarks
